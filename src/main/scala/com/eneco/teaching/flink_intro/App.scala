@@ -20,6 +20,9 @@ import org.apache.flink.streaming.api.functions.source.datagen.{DataGenerator, D
 import org.apache.avro.Schema
 import org.apache.flink.api.connector.sink.Sink
 import org.apache.flink.connector.base.DeliveryGuarantee
+import org.apache.flink.streaming.api.windowing.assigners.{GlobalWindows, TumblingProcessingTimeWindows}
+import com.eneco.teaching.flink_intro.MyProcessWindowFunction
+import org.apache.flink.streaming.api.windowing.time.Time
 import pureconfig._
 import pureconfig.error.ConvertFailure
 import pureconfig.ConfigSource
@@ -84,9 +87,9 @@ object App {
 
     val watermarkStrategy: WatermarkStrategy[String] = WatermarkStrategy
       .forBoundedOutOfOrderness[String](Duration.ofSeconds(appConfig.kafkaConf.maxOutOfOrdernessSec))
-      .withTimestampAssigner(new SerializableTimestampAssigner[String] {
-        override def extractTimestamp(record: String, recordTimestamp: Long): Long = System.currentTimeMillis
-      }) // processing time
+//      .withTimestampAssigner(new SerializableTimestampAssigner[String] {
+//        override def extractTimestamp(record: String, recordTimestamp: Long): Long = System.currentTimeMillis
+//      })
       .withIdleness(Duration.ofSeconds(appConfig.kafkaConf.maxOutOfOrdernessSec))
 
     val kafkaDataDs: DataStreamSource[String] = env.fromSource(
@@ -109,11 +112,12 @@ object App {
 
     val kafkaDataTransformedDs: SingleOutputStreamOperator[String] = kafkaDataDs
       .filter((str: String) => str.contains('A'))
-      .setParallelism(5)
+//      .setParallelism(5)
       .map[String]((str: String) => {
-        f"$str,${System.currentTimeMillis()}"
+        f"${System.currentTimeMillis()/10000},$str"
       })
-      .setParallelism(1)
+
+    env.setParallelism(1)
 
     val transformedSink: StreamingFileSink[String] = StreamingFileSink
       .forRowFormat(new Path(f"${appConfig.resultLocalPath}kafka_transformed"), new SimpleStringEncoder[String]("UTF-8"))
@@ -125,8 +129,12 @@ object App {
           .build())
       .build()
 
-    kafkaDataTransformedDs
-      .union(text)
+    val kafkaDataWindowedDs: SingleOutputStreamOperator[String] = kafkaDataTransformedDs
+      .keyBy((str: String) => str.split(",")(0))
+      .window(TumblingProcessingTimeWindows.of(Time.seconds(5)))
+      .process(new MyProcessWindowFunction())
+
+    kafkaDataWindowedDs
       .addSink(transformedSink)
 
     env.execute()
