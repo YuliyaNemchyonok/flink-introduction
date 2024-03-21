@@ -1,6 +1,6 @@
 package com.eneco.teaching.flink_intro.entities
 
-case class Maf5Entity(subscriber_no: String,
+case class TestEntity(subscriber_no: String,
                       event_time: Long,
                       message_switch_id: String,
                       call_action_code: Option[Int],
