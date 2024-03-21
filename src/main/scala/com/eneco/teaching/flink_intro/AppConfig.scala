@@ -5,8 +5,7 @@ import scala.language.implicitConversions
 case class KafkaConfig(
                         kafkaCommonParams: Map[String, String],
                         sourceTopicName: String,
-                        maxOutOfOrdernessSec: Int,
-                        targetTopicName: String
+                        maxOutOfOrdernessSec: Int
                     )
 
 case class AppConfig(
